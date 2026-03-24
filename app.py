@@ -121,24 +121,25 @@ else:
 
         st.markdown("---")
         
-        # ==========================================
-        # BOOKING FORM (Yahan se niche aapka Booking form hoga)
+       # ==========================================
+        # BOOKING FORM
         # ==========================================
         st.header("📝 New Customer Entry")
-        # ... (Aapka baqi form ka code) ...
         with st.form("booking_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
                 name = st.text_input("Customer Name *")
                 nic = st.text_input("NIC Number *")
                 selected_rooms = st.multiselect("Assign Room(s) *", room_names)
-                num_people = st.number_input("Total Number of Persons", min_value=1, max_value=20, value=1)
+                num_people = st.number_input("Total Number of Persons (Beds needed)", min_value=1, max_value=20, value=1)
             with col2:
                 days = st.number_input("Number of Days", min_value=1, value=1)
-                per_day = st.number_input("Charges per Day (Rs) - (Per Room)", min_value=0, value=1000)
+                # Heading ko 'Per Room' se 'Per Bed' kar diya hai
+                per_day = st.number_input("Charges per Day (Rs) - (Per Bed/Person)", min_value=0, value=1000)
                 advance = st.number_input("Advance Paid (Rs)", min_value=0, value=0)
                 
-            total_bill = days * per_day * len(selected_rooms)
+            # MAIN FIX: Calculation ab number of rooms (len) ki bajaye number of people (beds) par hogi
+            total_bill = days * per_day * num_people
             balance = total_bill - advance
             st.info(f"💰 **Total Bill:** Rs {total_bill} | **Remaining Balance:** Rs {balance}")
             
