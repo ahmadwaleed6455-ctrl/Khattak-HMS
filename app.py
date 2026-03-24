@@ -57,63 +57,58 @@ else:
     for doc in db.collection('Rooms').stream():
         rooms_data[doc.id] = doc.to_dict().get('beds', [False, False, False, False])
     room_names = sorted(list(rooms_data.keys()))
-
-    # ==========================================
-    # PAGE 1: DASHBOARD & BOOKING (NEW GRID DESIGN)
+# ==========================================
+    # PAGE 1: DASHBOARD & BOOKING (FIXED 4 COLUMNS GRID)
     # ==========================================
     if menu == "🏨 Dashboard & Booking":
         st.title("🏨 Live Room Dashboard")
         
-        # Kamron ko Floor ke hisaab se arrange karna
-        floors = {}
+        # 1. Kamron ko unke makhsoos floors (1 se 4) mein taqseem karna
+        floor_rooms = {1: [], 2: [], 3: [], 4: []}
+        
         for room in room_names:
             try:
                 room_num = int(room.split('_'))
                 floor_num = room_num // 100
+                if floor_num in floor_rooms:
+                    floor_rooms[floor_num].append(room)
             except:
-                floor_num = 0
-                
-            if floor_num not in floors:
-                floors[floor_num] = []
-            floors[floor_num].append(room)
+                pass
 
-        floor_nums_sorted = sorted(floors.keys())
+        # 2. Fix 4 Columns Banana (Har floor ke liye ek column)
+        col1, col2, col3, col4 = st.columns(4)
+        cols = [col1, col2, col3, col4]
+        floor_titles = ["1st Floor", "2nd Floor", "3rd Floor", "4th Floor"]
         
-        # --- AAPKI PICTURE WALA GRID LAYOUT ---
-        if len(floor_nums_sorted) > 0:
-            # Jitne floors hain, utne columns banayenge (e.g., 4 floors = 4 columns)
-            cols = st.columns(len(floor_nums_sorted))
-            
-            for i, floor_num in enumerate(floor_nums_sorted):
-                with cols[i]:
-                    # Floor Heading
-                    if floor_num == 1: floor_name = "1st Floor"
-                    elif floor_num == 2: floor_name = "2nd Floor"
-                    elif floor_num == 3: floor_name = "3rd Floor"
-                    else: floor_name = f"{floor_num}th Floor"
-                    if floor_num == 0: floor_name = "Ground Floor"
-                    
-                    st.markdown(f"<h4 style='text-align: center; border-bottom: 2px solid #ccc; padding-bottom: 5px;'>{floor_name}</h4>", unsafe_allow_html=True)
-                    
-                    # Har floor ke rooms
-                    for room in floors[floor_num]:
+        for i in range(4):
+            with cols[i]:
+                # Khubsurat Floor Heading
+                st.markdown(f"<h4 style='text-align: center; background-color: #2c3e50; color: white; padding: 10px; border-radius: 5px; margin-bottom: 15px;'>{floor_titles[i]}</h4>", unsafe_allow_html=True)
+                
+                # Agar us floor par kamre hain toh unhe niche ki taraf list karna
+                if len(floor_rooms[i+1]) > 0:
+                    for room in floor_rooms[i+1]:
                         beds = rooms_data[room]
                         room_display_num = room.split('_')
                         
-                        # Beds ka status: 🟢 = Vacant, 🔴 = Occupied
+                        # Beds ka status: 🟢 = Khali, 🔴 = Booked
                         bed_icons = "".join(["🔴 " if b else "🟢 " for b in beds])
                         
-                        # Khubsurat Box (Card) Design
+                        # Kamre ka Box (Niche ki taraf drag down hone ke liye)
                         st.markdown(f"""
-                        <div style="border: 2px solid #e0e0e0; border-radius: 8px; padding: 10px; margin-bottom: 15px; text-align: center; background-color: #ffffff; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
-                            <h2 style="margin: 0; color: #2c3e50; font-size: 28px;">{room_display_num}</h2>
-                            <p style="margin: 5px 0 0 0; font-size: 16px; letter-spacing: 3px;">{bed_icons}</p>
+                        <div style="border: 2px solid #e0e0e0; border-radius: 8px; padding: 10px; margin-bottom: 10px; text-align: center; background-color: #f8f9fa; box-shadow: 1px 1px 3px rgba(0,0,0,0.1);">
+                            <h3 style="margin: 0; color: #2c3e50;">{room_display_num}</h3>
+                            <p style="margin: 5px 0 0 0; font-size: 16px; letter-spacing: 2px;">{bed_icons}</p>
                         </div>
                         """, unsafe_allow_html=True)
+                else:
+                    st.info("No Rooms")
 
         st.markdown("---")
         
-        # --- BOOKING FORM (Niche waise hi rahega) ---
+      # ==========================================
+        # BOOKING FORM (Niche waise hi rahega)
+        # ==========================================
         st.header("📝 New Customer Entry")
         with st.form("booking_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
@@ -171,7 +166,6 @@ else:
                         })
                         st.success("✅ Booking Confirmed! Go to 'Invoices & Checkout' to manage.")
                         st.rerun()
-
     # ==========================================
     # PAGE 2: INVOICES & CHECKOUT
     # ==========================================
