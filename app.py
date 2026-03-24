@@ -205,7 +205,7 @@ else:
             
             if selected_b:
                 st.markdown("---")
-                col1, col2 = st.columns()
+                col1, col2 = st.columns(2)
                 
                 # UPDATE PAYMENT FORM
                 with col1:
