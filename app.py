@@ -48,7 +48,7 @@ else:
     st.sidebar.markdown("---")
     menu = st.sidebar.radio("Main Menu", [
         "🏨 Dashboard & Booking", 
-        "🧾 Invoices & Checkout",  # Naam update kiya hai
+        "🧾 Invoices & Checkout",  
         "💰 Accounts & Reports", 
         "⚙️ Manage Rooms"
     ])
@@ -59,51 +59,61 @@ else:
     room_names = sorted(list(rooms_data.keys()))
 
     # ==========================================
-    # PAGE 1: DASHBOARD & BOOKING
+    # PAGE 1: DASHBOARD & BOOKING (NEW GRID DESIGN)
     # ==========================================
     if menu == "🏨 Dashboard & Booking":
-        st.title("🏨 Live Room Status & Booking")
-        st.subheader("📊 Floor Status")
+        st.title("🏨 Live Room Dashboard")
         
+        # Kamron ko Floor ke hisaab se arrange karna
         floors = {}
         for room in room_names:
             try:
-                # FIX: split('_') lazmi hai taake kamre ka number mile
                 room_num = int(room.split('_'))
                 floor_num = room_num // 100
-                floor_name = "Ground Floor" if floor_num == 0 else f"Floor {floor_num}"
             except:
-                floor_name = "Other"
+                floor_num = 0
                 
-            if floor_name not in floors:
-                floors[floor_name] = []
-            floors[floor_name].append(room)
+            if floor_num not in floors:
+                floors[floor_num] = []
+            floors[floor_num].append(room)
 
-        floor_names_sorted = sorted(floors.keys())
+        floor_nums_sorted = sorted(floors.keys())
         
-        if len(floor_names_sorted) > 0:
-            cols = st.columns(len(floor_names_sorted))
-            for i, floor in enumerate(floor_names_sorted):
+        # --- AAPKI PICTURE WALA GRID LAYOUT ---
+        if len(floor_nums_sorted) > 0:
+            # Jitne floors hain, utne columns banayenge (e.g., 4 floors = 4 columns)
+            cols = st.columns(len(floor_nums_sorted))
+            
+            for i, floor_num in enumerate(floor_nums_sorted):
                 with cols[i]:
-                    st.markdown(f"### 🏢 {floor}")
-                    with st.container(height=450, border=True):
-                        for room in floors[floor]:
-                            beds = rooms_data[room]
-                            st.markdown(f"**{room.replace('_', ' ')}**")
-                            vacant_beds = beds.count(False)
-                            
-                            if vacant_beds == 4:
-                                st.success("🟢 4 Free")
-                            elif vacant_beds == 0:
-                                st.error("🔴 Full")
-                            else:
-                                st.warning(f"🟡 {vacant_beds} Free")
-                                
-                            st.caption("".join(["🛌 " if b else "🛏️ " for b in beds]))
-                            st.divider()
+                    # Floor Heading
+                    if floor_num == 1: floor_name = "1st Floor"
+                    elif floor_num == 2: floor_name = "2nd Floor"
+                    elif floor_num == 3: floor_name = "3rd Floor"
+                    else: floor_name = f"{floor_num}th Floor"
+                    if floor_num == 0: floor_name = "Ground Floor"
+                    
+                    st.markdown(f"<h4 style='text-align: center; border-bottom: 2px solid #ccc; padding-bottom: 5px;'>{floor_name}</h4>", unsafe_allow_html=True)
+                    
+                    # Har floor ke rooms
+                    for room in floors[floor_num]:
+                        beds = rooms_data[room]
+                        room_display_num = room.split('_')
+                        
+                        # Beds ka status: 🟢 = Vacant, 🔴 = Occupied
+                        bed_icons = "".join(["🔴 " if b else "🟢 " for b in beds])
+                        
+                        # Khubsurat Box (Card) Design
+                        st.markdown(f"""
+                        <div style="border: 2px solid #e0e0e0; border-radius: 8px; padding: 10px; margin-bottom: 15px; text-align: center; background-color: #ffffff; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
+                            <h2 style="margin: 0; color: #2c3e50; font-size: 28px;">{room_display_num}</h2>
+                            <p style="margin: 5px 0 0 0; font-size: 16px; letter-spacing: 3px;">{bed_icons}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
 
         st.markdown("---")
         
+        # --- BOOKING FORM (Niche waise hi rahega) ---
         st.header("📝 New Customer Entry")
         with st.form("booking_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
@@ -157,13 +167,13 @@ else:
                             "Total_Bill": total_bill,
                             "Advance_Paid": advance,
                             "Balance_Pending": balance,
-                            "Status": "Active" # Status Active save hoga
+                            "Status": "Active"
                         })
                         st.success("✅ Booking Confirmed! Go to 'Invoices & Checkout' to manage.")
                         st.rerun()
 
     # ==========================================
-    # PAGE 2: INVOICES & CHECKOUT (Print & Clear Rooms)
+    # PAGE 2: INVOICES & CHECKOUT
     # ==========================================
     elif menu == "🧾 Invoices & Checkout":
         st.title("🧾 Invoice & Room Departure")
@@ -186,7 +196,6 @@ else:
             }
             bookings.append(b)
             
-        # Sirf "Active" log hi checkout mein nazar aayenge
         active_bookings = [b for b in bookings if b['Status'] == 'Active']
             
         if not active_bookings:
@@ -201,7 +210,6 @@ else:
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    # UPDATE PAYMENT FORM
                     st.subheader("💵 Update Payment")
                     st.write(f"**Current Due Balance:** Rs {selected_b['Balance_Pending']}")
                     
@@ -218,9 +226,6 @@ else:
                             st.success(f"Payment of Rs {new_payment} updated! Please refresh invoice.")
                             st.rerun()
 
-                    # =====================================
-                    # DEPARTURE SYSTEM (Room Clear)
-                    # =====================================
                     st.markdown("---")
                     st.subheader("🚪 Departure & Check-out")
                     if selected_b['Balance_Pending'] > 0:
@@ -230,7 +235,6 @@ else:
                         st.success("✅ Payment is cleared. Customer is ready to check out.")
                         if st.button("Complete Check-out & Free Rooms", type="primary"):
                             
-                            # 1. Kamre se beds free karna (True ko False karna)
                             rooms_list = [f"Room_{r.strip()}" for r in selected_b['Room'].split(",")]
                             people_to_remove = selected_b['Persons']
                             
@@ -241,10 +245,8 @@ else:
                                         if current_beds[idx] == True and people_to_remove > 0:
                                             current_beds[idx] = False
                                             people_to_remove -= 1
-                                    # Database mein vacant beds update
                                     db.collection('Rooms').document(r).update({'beds': current_beds})
                             
-                            # 2. Customer ka Status "Completed" karna
                             db.collection('Bookings').document(selected_booking_id).update({
                                 'Status': 'Checked Out'
                             })
@@ -253,12 +255,10 @@ else:
                             st.rerun()
 
                 with col2:
-                    # PRINTABLE INVOICE WITH BUTTON
                     st.subheader("🖨️ Customer Invoice")
                     
                     invoice_html = f"""
                     <style>
-                        /* Print karte waqt button chup jaye */
                         @media print {{
                             .no-print {{ display: none !important; }}
                             body {{ background-color: white !important; }}
@@ -341,7 +341,6 @@ else:
             col_c.metric("⚠️ Pending Balance", f"Rs {filtered_df['Balance_Pending'].sum():,}")
             
             st.subheader("📝 Detailed Transaction Record")
-            # Yahan hum Status bhi show kar rahe hain
             st.dataframe(filtered_df[['Date', 'Room', 'Name', 'Persons', 'Status', 'Total_Bill', 'Advance_Paid', 'Balance_Pending']], use_container_width=True)
         else:
             st.info("Abhi tak koi booking nahi hui. Data khali hai.")
