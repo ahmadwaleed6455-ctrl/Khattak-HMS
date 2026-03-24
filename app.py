@@ -355,12 +355,14 @@ else:
         else:
             st.info("Abhi tak koi booking nahi hui. Data khali hai.")
 
-    # ==========================================
+# ==========================================
     # PAGE 4: MANAGE ROOMS
     # ==========================================
     elif menu == "⚙️ Manage Rooms":
         st.title("⚙️ Room Management")
-        col1, col2 = st.columns(2)
+        
+        # Main ne yahan 2 ki jagah 3 columns kar diye hain
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             st.subheader("➕ Add New Room")
@@ -379,15 +381,57 @@ else:
             st.subheader("🗑️ Delete a Room")
             with st.form("delete_room_form"):
                 room_to_delete = st.selectbox("Select Room to Delete", room_names)
-                confirm_delete = st.checkbox(f"Yes, I want to permanently delete {room_to_delete}")
+                confirm_delete = st.checkbox(f"Yes, permanently delete {room_to_delete}")
                 if st.form_submit_button("Delete Room"):
                     if not confirm_delete:
                         st.warning("Please tick the confirmation box to delete.")
                     else:
                         current_beds = rooms_data[room_to_delete]
                         if True in current_beds:
-                            st.error(f"⚠️ App {room_to_delete} ko delete nahi kar sakte kyunke wahan log thehre hue hain!")
+                            st.error(f"⚠️ Aap {room_to_delete} ko delete nahi kar sakte kyunke wahan log thehre hue hain!")
                         else:
                             db.collection('Rooms').document(room_to_delete).delete()
                             st.success(f"✅ {room_to_delete} deleted successfully!")
                             st.rerun()
+
+        # NAYA FEATURE: KAMRE KO ZABARDASTI KHALI KARNA
+        with col3:
+            st.subheader("🧹 Force Reset Room")
+            st.write("Agar system ghalati se bed bhara dikhaye, toh isay use karein.")
+            with st.form("reset_room_form"):
+                room_to_reset = st.selectbox("Select Room to Reset", room_names, key="reset_select")
+                if st.form_submit_button("Force Make Vacant"):
+                    # Kamre ke charon beds ko zabardasti False (Khali) kar dena
+                    db.collection('Rooms').document(room_to_reset).update({'beds': [False, False, False, False]})
+                    st.success(f"✅ {room_to_reset} ke sab beds khali kar diye gaye hain!")
+                    st.rerun()
+
+        st.markdown("---")
+        
+        # ==========================================
+        # OCCUPIED ROOMS & BEDS LIST
+        # ==========================================
+        st.subheader("🛏️ Currently Occupied Rooms & Beds")
+        
+        occupied_list = []
+        for room, beds in rooms_data.items():
+            occupied_count = sum(beds)
+            
+            if occupied_count > 0:
+                occupied_bed_numbers = [f"Bed {i+1}" for i, is_occupied in enumerate(beds) if is_occupied]
+                occupied_list.append({
+                    "Room Number": room.replace("Room_", ""),
+                    "Total Occupied Beds": f"{occupied_count} / 4",
+                    "Bed Details": ", ".join(occupied_bed_numbers)
+                })
+        
+        if len(occupied_list) > 0:
+            df_occupied = pd.DataFrame(occupied_list)
+            st.table(df_occupied)
+        else:
+            st.success("🟢 All rooms are completely vacant right now. No one is occupying any bed.")
+            
+        st.markdown("---")
+        st.subheader("📋 Total Active Rooms in System")
+        st.write(f"Total Kamre: **{len(room_names)}**")
+        st.write(", ".join([r.replace("Room_", "") for r in room_names]))
