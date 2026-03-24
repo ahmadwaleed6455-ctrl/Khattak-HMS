@@ -13,31 +13,22 @@ st.set_page_config(page_title="Khattak HMS", layout="wide", page_icon="🏨")
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-# Agar user login NAMI hai, toh sirf Login Screen dikhao
 if not st.session_state.logged_in:
-    
-    # Login form ko center karne ke liye columns
     col1, col2, col3 = st.columns(3)
     with col2:
         st.title("🔒 Security Lock")
         st.write("Authorized Personnel Only")
-        
         with st.form("login_form"):
             password = st.text_input("Enter Admin Password", type="password")
-            submit = st.form_submit_button("Login")
-            
-            if submit:
-                # Password check karna (jo Streamlit Secrets mein save hai)
+            if st.form_submit_button("Login"):
                 if password == st.secrets["admin_password"]:
                     st.session_state.logged_in = True
                     st.rerun()
                 else:
                     st.error("❌ Incorrect Password!")
-
-# Agar user login HAI, toh poori app chalao
 else:
     # ==========================================
-    # 1. FIREBASE CONNECTION SETUP
+    # 1. FIREBASE CONNECTION
     # ==========================================
     if not firebase_admin._apps:
         key_dict = json.loads(st.secrets["firebase_json"])
@@ -47,26 +38,29 @@ else:
     db = firestore.client()
 
     # ==========================================
-    # 2. SIDEBAR MENU NAVIGATION
+    # 2. SIDEBAR NAVIGATION
     # ==========================================
     st.sidebar.title("🏨 Khattak HMS")
-    
-    # Logout Button
     if st.sidebar.button("🚪 Logout", use_container_width=True):
         st.session_state.logged_in = False
         st.rerun()
         
     st.sidebar.markdown("---")
-    menu = st.sidebar.radio("Main Menu", ["🏨 Dashboard & Booking", "💰 Accounts & Reports", "⚙️ Manage Rooms"])
+    # NAYA MENU ADD KIYA HAI
+    menu = st.sidebar.radio("Main Menu", [
+        "🏨 Dashboard & Booking", 
+        "🧾 Invoices & Payments", 
+        "💰 Accounts & Reports", 
+        "⚙️ Manage Rooms"
+    ])
 
-    # Fetch Active Rooms Data
     rooms_data = {}
     for doc in db.collection('Rooms').stream():
         rooms_data[doc.id] = doc.to_dict().get('beds', [False, False, False, False])
     room_names = sorted(list(rooms_data.keys()))
 
     # ==========================================
-    # PAGE 1: DASHBOARD & BOOKING
+    # PAGE 1: DASHBOARD & BOOKING (Multi-Room)
     # ==========================================
     if menu == "🏨 Dashboard & Booking":
         st.title("🏨 Live Room Status & Booking")
@@ -89,7 +83,6 @@ else:
         
         if len(floor_names_sorted) > 0:
             cols = st.columns(len(floor_names_sorted))
-            
             for i, floor in enumerate(floor_names_sorted):
                 with cols[i]:
                     st.markdown(f"### 🏢 {floor}")
@@ -117,39 +110,53 @@ else:
             with col1:
                 name = st.text_input("Customer Name *")
                 nic = st.text_input("NIC Number *")
-                selected_room = st.selectbox("Assign Room", room_names)
-                num_people = st.number_input("Number of Persons", min_value=1, max_value=4, value=1)
+                # MULTI-SELECT FOR ROOMS
+                selected_rooms = st.multiselect("Assign Room(s) *", room_names)
+                num_people = st.number_input("Total Number of Persons", min_value=1, max_value=20, value=1)
             with col2:
                 days = st.number_input("Number of Days", min_value=1, value=1)
-                per_day = st.number_input("Charges per Day (Rs)", min_value=0, value=1000)
+                per_day = st.number_input("Charges per Day (Rs) - (Per Room)", min_value=0, value=1000)
                 advance = st.number_input("Advance Paid (Rs)", min_value=0, value=0)
                 
-            total_bill = days * per_day * num_people
+            # Calculation: Per Day * Days * Number of Rooms
+            total_bill = days * per_day * len(selected_rooms)
             balance = total_bill - advance
             st.info(f"💰 **Total Bill:** Rs {total_bill} | **Remaining Balance:** Rs {balance}")
             
             if st.form_submit_button("Confirm Booking"):
-                if name == "" or nic == "":
-                    st.error("Please enter Name and NIC!")
+                if name == "" or nic == "" or not selected_rooms:
+                    st.error("Please fill Name, NIC, and select at least one room!")
                 else:
-                    current_beds = rooms_data[selected_room]
-                    if num_people > current_beds.count(False):
-                        st.error(f"Not enough beds in {selected_room}!")
+                    # Check total available beds in selected rooms
+                    total_available_beds = sum(rooms_data[r].count(False) for r in selected_rooms)
+                    
+                    if num_people > total_available_beds:
+                        st.error(f"Not enough beds! The selected rooms only have {total_available_beds} free beds.")
                     else:
-                        beds_booked = 0
-                        for idx in range(4):
-                            if current_beds[idx] == False and beds_booked < num_people:
-                                current_beds[idx] = True
-                                beds_booked += 1
+                        # Smart Bed Allocation Across Multiple Rooms
+                        rooms_to_update = {}
+                        people_left_to_assign = num_people
+                        
+                        for r in selected_rooms:
+                            beds = rooms_data[r].copy()
+                            for idx in range(4):
+                                if beds[idx] == False and people_left_to_assign > 0:
+                                    beds[idx] = True
+                                    people_left_to_assign -= 1
+                            rooms_to_update[r] = beds
                                 
-                        db.collection('Rooms').document(selected_room).update({'beds': current_beds})
+                        # Update all selected rooms in Database
+                        for r, new_beds in rooms_to_update.items():
+                            db.collection('Rooms').document(r).update({'beds': new_beds})
+                        
+                        rooms_str = ", ".join([r.replace("Room_", "") for r in selected_rooms])
                         
                         db.collection('Bookings').add({
                             "Date": str(date.today()),
                             "Timestamp": datetime.now(),
                             "Name": name,
                             "NIC": nic,
-                            "Room": selected_room,
+                            "Room": rooms_str, # Saved as string "101, 102"
                             "Persons": num_people,
                             "Days": days,
                             "Total_Bill": total_bill,
@@ -157,18 +164,101 @@ else:
                             "Balance_Pending": balance,
                             "Status": "Active"
                         })
-                        st.success("✅ Booking Confirmed!")
+                        st.success("✅ Booking Confirmed! Go to 'Invoices & Payments' to print receipt.")
                         st.rerun()
 
-# ==========================================
-    # PAGE 2: ACCOUNTS & REPORTS
+    # ==========================================
+    # PAGE 2: INVOICES & PAYMENTS (Clear Dues & Print)
+    # ==========================================
+    elif menu == "🧾 Invoices & Payments":
+        st.title("🧾 Generate Invoice & Clear Dues")
+        
+        # Fetch all bookings from Firebase
+        bookings = []
+        for doc in db.collection('Bookings').stream():
+            b = doc.to_dict()
+            b['id'] = doc.id # Save document ID to update it later
+            bookings.append(b)
+            
+        if not bookings:
+            st.info("No bookings available.")
+        else:
+            # Dropdown options banana
+            booking_opts = {b['id']: f"{b['Name']} - Room(s): {b['Room']} | Date: {b['Date']} | Dues: Rs {b['Balance_Pending']}" for b in bookings}
+            
+            selected_booking_id = st.selectbox("Search & Select Customer Record", list(booking_opts.keys()), format_func=lambda x: booking_opts[x])
+            
+            selected_b = next((b for b in bookings if b['id'] == selected_booking_id), None)
+            
+            if selected_b:
+                st.markdown("---")
+                col1, col2 = st.columns()
+                
+                # UPDATE PAYMENT FORM
+                with col1:
+                    st.subheader("💵 Update Payment")
+                    st.write(f"**Current Due Balance:** Rs {selected_b['Balance_Pending']}")
+                    
+                    with st.form("pay_dues_form"):
+                        new_payment = st.number_input("Enter Receiving Amount (Rs)", min_value=0, max_value=selected_b['Balance_Pending'], value=selected_b['Balance_Pending'])
+                        if st.form_submit_button("Update Payment"):
+                            new_advance = selected_b['Advance_Paid'] + new_payment
+                            new_balance = selected_b['Total_Bill'] - new_advance
+                            
+                            # Update in Firebase using Document ID
+                            db.collection('Bookings').document(selected_booking_id).update({
+                                'Advance_Paid': new_advance,
+                                'Balance_Pending': new_balance
+                            })
+                            st.success(f"Payment of Rs {new_payment} updated successfully!")
+                            st.rerun()
+
+                # PRINTABLE INVOICE RECEIPT
+                with col2:
+                    st.subheader("🖨️ Printable Invoice")
+                    st.write("Press `Ctrl + P` to print or save as PDF.")
+                    
+                    # HTML and CSS for a professional receipt
+                    invoice_html = f"""
+                    <div style="border: 2px solid #333; padding: 20px; border-radius: 10px; background-color: #f9f9f9; color: #333; font-family: Arial, sans-serif;">
+                        <div style="text-align: center; border-bottom: 2px dashed #ccc; padding-bottom: 10px; margin-bottom: 20px;">
+                            <h2 style="margin: 0; color: #2c3e50;">HOTEL KHATTAK HMS</h2>
+                            <p style="margin: 5px 0; font-size: 14px; color: #7f8c8d;">Peshawar, Khyber Pakhtunkhwa</p>
+                            <p style="margin: 5px 0; font-size: 14px; font-weight: bold;">Date: {selected_b['Date']}</p>
+                        </div>
+                        
+                        <table style="width: 100%; margin-bottom: 20px; border-collapse: collapse;">
+                            <tr><td style="padding: 5px 0;"><strong>Customer Name:</strong></td><td style="text-align: right;">{selected_b['Name']}</td></tr>
+                            <tr><td style="padding: 5px 0;"><strong>NIC:</strong></td><td style="text-align: right;">{selected_b['NIC']}</td></tr>
+                            <tr><td style="padding: 5px 0;"><strong>Room(s):</strong></td><td style="text-align: right;">{selected_b['Room']}</td></tr>
+                            <tr><td style="padding: 5px 0;"><strong>Persons:</strong></td><td style="text-align: right;">{selected_b['Persons']}</td></tr>
+                            <tr><td style="padding: 5px 0;"><strong>Duration:</strong></td><td style="text-align: right;">{selected_b['Days']} Days</td></tr>
+                        </table>
+                        
+                        <div style="border-top: 2px dashed #ccc; padding-top: 15px;">
+                            <table style="width: 100%; font-size: 18px;">
+                                <tr><td style="padding: 5px 0;"><strong>Total Bill:</strong></td><td style="text-align: right;">Rs {selected_b['Total_Bill']:,}</td></tr>
+                                <tr><td style="padding: 5px 0; color: green;"><strong>Amount Paid:</strong></td><td style="text-align: right; color: green;">Rs {selected_b['Advance_Paid']:,}</td></tr>
+                                <tr><td style="padding: 10px 0; font-size: 20px; color: {'red' if selected_b['Balance_Pending'] > 0 else 'black'};"><strong>Balance Due:</strong></td><td style="text-align: right; font-weight: bold; color: {'red' if selected_b['Balance_Pending'] > 0 else 'black'};">Rs {selected_b['Balance_Pending']:,}</td></tr>
+                            </table>
+                        </div>
+                        
+                        <div style="text-align: center; margin-top: 30px; font-size: 12px; color: #7f8c8d;">
+                            <p>Thank you for choosing Hotel Khattak!</p>
+                            <p>System Generated Invoice</p>
+                        </div>
+                    </div>
+                    """
+                    st.components.v1.html(invoice_html, height=550, scrolling=True)
+
+
+    # ==========================================
+    # PAGE 3: ACCOUNTS & REPORTS
     # ==========================================
     elif menu == "💰 Accounts & Reports":
         st.title("💰 Financial Reports & Statements")
         
         docs = db.collection('Bookings').stream()
-        
-        # SMART FIX: Purane aur naye data ko ek format mein lana
         bookings_list = []
         for doc in docs:
             data = doc.to_dict()
@@ -176,7 +266,6 @@ else:
                 'Date': data.get('Date'),
                 'Room': data.get('Room'),
                 'Name': data.get('Name'),
-                # Agar naya naam na mile toh purana naam utha lo
                 'Persons': data.get('Persons', data.get('Beds_Booked', 1)),
                 'Total_Bill': data.get('Total_Bill', 0),
                 'Advance_Paid': data.get('Advance_Paid', data.get('Advance', 0)),
@@ -196,7 +285,6 @@ else:
             filtered_df = df.loc[mask]
             
             st.markdown("---")
-            
             col_a, col_b, col_c = st.columns(3)
             col_a.metric("💳 Total Generated Bill", f"Rs {filtered_df['Total_Bill'].sum():,}")
             col_b.metric("💵 Total Cash Received", f"Rs {filtered_df['Advance_Paid'].sum():,}")
@@ -206,20 +294,18 @@ else:
             st.dataframe(filtered_df[['Date', 'Room', 'Name', 'Persons', 'Total_Bill', 'Advance_Paid', 'Balance_Pending']], use_container_width=True)
         else:
             st.info("Abhi tak koi booking nahi hui. Data khali hai.")
-            
+
     # ==========================================
-    # PAGE 3: MANAGE ROOMS
+    # PAGE 4: MANAGE ROOMS
     # ==========================================
     elif menu == "⚙️ Manage Rooms":
         st.title("⚙️ Room Management")
-        
         col1, col2 = st.columns(2)
         
         with col1:
             st.subheader("➕ Add New Room")
             with st.form("add_room_form", clear_on_submit=True):
                 new_room_num = st.number_input("Room Number (e.g., 201)", min_value=100, max_value=9999, step=1)
-                
                 if st.form_submit_button("Create Room"):
                     room_id = f"Room_{new_room_num}"
                     if room_id in room_names:
@@ -234,7 +320,6 @@ else:
             with st.form("delete_room_form"):
                 room_to_delete = st.selectbox("Select Room to Delete", room_names)
                 confirm_delete = st.checkbox(f"Yes, I want to permanently delete {room_to_delete}")
-                
                 if st.form_submit_button("Delete Room"):
                     if not confirm_delete:
                         st.warning("Please tick the confirmation box to delete.")
@@ -246,8 +331,3 @@ else:
                             db.collection('Rooms').document(room_to_delete).delete()
                             st.success(f"✅ {room_to_delete} deleted successfully!")
                             st.rerun()
-
-        st.markdown("---")
-        st.subheader("📋 Total Active Rooms")
-        st.write(f"Total Kamre: **{len(room_names)}**")
-        st.write(", ".join([r.replace("Room_", "") for r in room_names]))
