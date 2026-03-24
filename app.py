@@ -160,14 +160,28 @@ else:
                         st.success("✅ Booking Confirmed!")
                         st.rerun()
 
-    # ==========================================
+# ==========================================
     # PAGE 2: ACCOUNTS & REPORTS
     # ==========================================
     elif menu == "💰 Accounts & Reports":
         st.title("💰 Financial Reports & Statements")
         
         docs = db.collection('Bookings').stream()
-        bookings_list = [doc.to_dict() for doc in docs]
+        
+        # SMART FIX: Purane aur naye data ko ek format mein lana
+        bookings_list = []
+        for doc in docs:
+            data = doc.to_dict()
+            bookings_list.append({
+                'Date': data.get('Date'),
+                'Room': data.get('Room'),
+                'Name': data.get('Name'),
+                # Agar naya naam na mile toh purana naam utha lo
+                'Persons': data.get('Persons', data.get('Beds_Booked', 1)),
+                'Total_Bill': data.get('Total_Bill', 0),
+                'Advance_Paid': data.get('Advance_Paid', data.get('Advance', 0)),
+                'Balance_Pending': data.get('Balance_Pending', data.get('Balance', 0))
+            })
         
         if len(bookings_list) > 0:
             df = pd.DataFrame(bookings_list)
@@ -192,7 +206,7 @@ else:
             st.dataframe(filtered_df[['Date', 'Room', 'Name', 'Persons', 'Total_Bill', 'Advance_Paid', 'Balance_Pending']], use_container_width=True)
         else:
             st.info("Abhi tak koi booking nahi hui. Data khali hai.")
-
+            
     # ==========================================
     # PAGE 3: MANAGE ROOMS
     # ==========================================
