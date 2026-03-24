@@ -218,8 +218,8 @@ else:
             if selected_b:
                 st.markdown("---")
                 col1, col2 = st.columns(2)
-                
-          with col1:
+
+                with col1:
                     st.subheader("💵 Update Payment")
                     st.write(f"**Current Due Balance:** Rs {selected_b['Balance_Pending']}")
                     
@@ -297,6 +297,7 @@ else:
                             
                             st.success("Departure Successful! Rooms are now Vacant.")
                             st.rerun()
+          
 
                 with col2:
                     st.subheader("🖨️ Customer Invoice")
