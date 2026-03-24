@@ -2,22 +2,21 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import date
+import json # Yeh line nayi add ki hai
 
 st.set_page_config(page_title="Khattak HMS", layout="wide")
 
 # ==========================================
 # 1. FIREBASE CONNECTION SETUP
 # ==========================================
-# Check karte hain ke app pehle se connect toh nahi hai (Error se bachne ke liye)
 if not firebase_admin._apps:
-    # Streamlit secrets se chabi uthana
-    creds_dict = dict(st.secrets["firebase"])
-    cred = credentials.Certificate(creds_dict)
+    # Ab hum original JSON ko direct load kar rahe hain
+    key_dict = json.loads(st.secrets["firebase_json"])
+    cred = credentials.Certificate(key_dict)
     firebase_admin.initialize_app(cred)
 
 # Database ka access
 db = firestore.client()
-
 # ==========================================
 # 2. DEFAULT ROOMS SETUP (Pehli Dafa Ke Liye)
 # ==========================================
