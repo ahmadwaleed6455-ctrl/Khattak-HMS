@@ -173,11 +173,24 @@ else:
     elif menu == "🧾 Invoices & Payments":
         st.title("🧾 Generate Invoice & Clear Dues")
         
-        # Fetch all bookings from Firebase
+    # Fetch all bookings from Firebase (With Smart Key Fix)
         bookings = []
         for doc in db.collection('Bookings').stream():
-            b = doc.to_dict()
-            b['id'] = doc.id # Save document ID to update it later
+            data = doc.to_dict()
+            
+            # SMART FIX: Purane aur naye dono formats ko support karna
+            b = {
+                'id': doc.id,
+                'Name': data.get('Name', 'Unknown'),
+                'NIC': data.get('NIC', 'N/A'),
+                'Room': data.get('Room', 'N/A'),
+                'Date': data.get('Date', 'N/A'),
+                'Persons': data.get('Persons', data.get('Beds_Booked', 1)),
+                'Days': data.get('Days', 1),
+                'Total_Bill': data.get('Total_Bill', 0),
+                'Advance_Paid': data.get('Advance_Paid', data.get('Advance', 0)),
+                'Balance_Pending': data.get('Balance_Pending', data.get('Balance', 0))
+            }
             bookings.append(b)
             
         if not bookings:
