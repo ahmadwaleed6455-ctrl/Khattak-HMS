@@ -17,7 +17,7 @@ if "logged_in" not in st.session_state:
 if not st.session_state.logged_in:
     
     # Login form ko center karne ke liye columns
-    col1, col2, col3 = st.columns()
+col1, col2, col3 = st.columns(3)
     with col2:
         st.title("🔒 Security Lock")
         st.write("Authorized Personnel Only")
