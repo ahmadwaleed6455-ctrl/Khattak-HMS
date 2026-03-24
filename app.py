@@ -58,22 +58,20 @@ else:
         rooms_data[doc.id] = doc.to_dict().get('beds', [False, False, False, False])
     room_names = sorted(list(rooms_data.keys()))
 # ==========================================
-    # PAGE 1: DASHBOARD & BOOKING (FIXED 4 COLUMNS GRID)
+    # PAGE 1: DASHBOARD & BOOKING (FIXED 4 COLUMNS WITH SCROLLBAR)
     # ==========================================
     if menu == "🏨 Dashboard & Booking":
         st.title("🏨 Live Room Dashboard")
         
-        # 1. Kamron ko unke makhsoos floors mein taqseem karna (Safely)
+        # 1. Kamron ko unke makhsoos floors mein taqseem karna
         floor_rooms = {1: [], 2: [], 3: [], 4: []}
         
         for room in room_names:
-            # FIX: Room number nikalne ka robust tareeqa taake app kabhi error na de
             room_num_str = ''.join([c for c in room if c.isdigit()])
             if room_num_str:
                 room_num = int(room_num_str)
                 floor_num = room_num // 100
                 
-                # Floors ko 1, 2, 3, 4 mein fix karna
                 if floor_num < 1: floor_num = 1
                 if floor_num > 4: floor_num = 4
                 
@@ -87,48 +85,47 @@ else:
         for i in range(4):
             with cols[i]:
                 # Khubsurat Floor Heading
-                st.markdown(f"<h4 style='text-align: center; background-color: #2c3e50; color: white; padding: 10px; border-radius: 5px; margin-bottom: 15px;'>{floor_titles[i]}</h4>", unsafe_allow_html=True)
+                st.markdown(f"<h4 style='text-align: center; background-color: #2c3e50; color: white; padding: 10px; border-radius: 5px; margin-bottom: 10px;'>{floor_titles[i]}</h4>", unsafe_allow_html=True)
                 
-                # Kamron ko line se sort karna (e.g., 101, 102, 103)
                 sorted_rooms = sorted(floor_rooms[i+1], key=lambda x: int(''.join(filter(str.isdigit, x)) or 0))
                 
                 if len(sorted_rooms) > 0:
-                    for room in sorted_rooms:
-                        beds = rooms_data[room]
-                        room_display_num = ''.join([c for c in room if c.isdigit()])
-                        vacant_beds = beds.count(False)
-                        
-                        # Purane design wala Text aur Color logic
-                        if vacant_beds == 4:
-                            status_text = "🟢 4 Free"
-                            status_color = "#28a745" # Green
-                        elif vacant_beds == 0:
-                            status_text = "🔴 Full"
-                            status_color = "#dc3545" # Red
-                        else:
-                            status_text = f"🟡 {vacant_beds} Free"
-                            status_color = "#e6b800" # Yellow
+                    # SCROLLER KA JAADU: height=400 lagane se sirf 3 rows dikhengi, uske baad scrollbar aa jayega!
+                    with st.container(height=400, border=False):
+                        for room in sorted_rooms:
+                            beds = rooms_data[room]
+                            room_display_num = ''.join([c for c in room if c.isdigit()])
+                            vacant_beds = beds.count(False)
                             
-                        # Chote bed icons (Occupied = Insaan soya hua, Vacant = Khali bed)
-                        bed_icons = "".join(["🛌 " if b else "🛏️ " for b in beds])
-                        
-                        # Naya Card Design jisme Purana Text shamil hai
-                        st.markdown(f"""
-                        <div style="border: 1px solid #ddd; border-left: 6px solid {status_color}; border-radius: 5px; padding: 12px; margin-bottom: 12px; background-color: #fcfcfc; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
-                            <h3 style="margin: 0; color: #2c3e50; font-size: 22px;">Room {room_display_num}</h3>
-                            <p style="margin: 5px 0 2px 0; font-weight: bold; color: {status_color}; font-size: 15px;">{status_text}</p>
-                            <p style="margin: 0; font-size: 18px; letter-spacing: 2px;">{bed_icons}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
+                            if vacant_beds == 4:
+                                status_text = "🟢 4 Free"
+                                status_color = "#28a745"
+                            elif vacant_beds == 0:
+                                status_text = "🔴 Full"
+                                status_color = "#dc3545"
+                            else:
+                                status_text = f"🟡 {vacant_beds} Free"
+                                status_color = "#e6b800"
+                                
+                            bed_icons = "".join(["🛌 " if b else "🛏️ " for b in beds])
+                            
+                            st.markdown(f"""
+                            <div style="border: 1px solid #ddd; border-left: 6px solid {status_color}; border-radius: 5px; padding: 12px; margin-bottom: 12px; background-color: #fcfcfc; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
+                                <h3 style="margin: 0; color: #2c3e50; font-size: 22px;">Room {room_display_num}</h3>
+                                <p style="margin: 5px 0 2px 0; font-weight: bold; color: {status_color}; font-size: 15px;">{status_text}</p>
+                                <p style="margin: 0; font-size: 18px; letter-spacing: 2px;">{bed_icons}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
                 else:
                     st.info("No Rooms")
 
         st.markdown("---")
         
-      # ==========================================
-        # BOOKING FORM (Niche waise hi rahega jo aapke paas hai)
+        # ==========================================
+        # BOOKING FORM (Yahan se niche aapka Booking form hoga)
         # ==========================================
         st.header("📝 New Customer Entry")
+        # ... (Aapka baqi form ka code) ...
         with st.form("booking_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
