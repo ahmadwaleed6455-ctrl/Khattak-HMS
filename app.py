@@ -46,10 +46,9 @@ else:
         st.rerun()
         
     st.sidebar.markdown("---")
-    # NAYA MENU ADD KIYA HAI
     menu = st.sidebar.radio("Main Menu", [
         "🏨 Dashboard & Booking", 
-        "🧾 Invoices & Payments", 
+        "🧾 Invoices & Checkout",  # Naam update kiya hai
         "💰 Accounts & Reports", 
         "⚙️ Manage Rooms"
     ])
@@ -60,7 +59,7 @@ else:
     room_names = sorted(list(rooms_data.keys()))
 
     # ==========================================
-    # PAGE 1: DASHBOARD & BOOKING (Multi-Room)
+    # PAGE 1: DASHBOARD & BOOKING
     # ==========================================
     if menu == "🏨 Dashboard & Booking":
         st.title("🏨 Live Room Status & Booking")
@@ -69,6 +68,7 @@ else:
         floors = {}
         for room in room_names:
             try:
+                # FIX: split('_') lazmi hai taake kamre ka number mile
                 room_num = int(room.split('_'))
                 floor_num = room_num // 100
                 floor_name = "Ground Floor" if floor_num == 0 else f"Floor {floor_num}"
@@ -110,7 +110,6 @@ else:
             with col1:
                 name = st.text_input("Customer Name *")
                 nic = st.text_input("NIC Number *")
-                # MULTI-SELECT FOR ROOMS
                 selected_rooms = st.multiselect("Assign Room(s) *", room_names)
                 num_people = st.number_input("Total Number of Persons", min_value=1, max_value=20, value=1)
             with col2:
@@ -118,7 +117,6 @@ else:
                 per_day = st.number_input("Charges per Day (Rs) - (Per Room)", min_value=0, value=1000)
                 advance = st.number_input("Advance Paid (Rs)", min_value=0, value=0)
                 
-            # Calculation: Per Day * Days * Number of Rooms
             total_bill = days * per_day * len(selected_rooms)
             balance = total_bill - advance
             st.info(f"💰 **Total Bill:** Rs {total_bill} | **Remaining Balance:** Rs {balance}")
@@ -127,13 +125,11 @@ else:
                 if name == "" or nic == "" or not selected_rooms:
                     st.error("Please fill Name, NIC, and select at least one room!")
                 else:
-                    # Check total available beds in selected rooms
                     total_available_beds = sum(rooms_data[r].count(False) for r in selected_rooms)
                     
                     if num_people > total_available_beds:
                         st.error(f"Not enough beds! The selected rooms only have {total_available_beds} free beds.")
                     else:
-                        # Smart Bed Allocation Across Multiple Rooms
                         rooms_to_update = {}
                         people_left_to_assign = num_people
                         
@@ -145,7 +141,6 @@ else:
                                     people_left_to_assign -= 1
                             rooms_to_update[r] = beds
                                 
-                        # Update all selected rooms in Database
                         for r, new_beds in rooms_to_update.items():
                             db.collection('Rooms').document(r).update({'beds': new_beds})
                         
@@ -156,29 +151,26 @@ else:
                             "Timestamp": datetime.now(),
                             "Name": name,
                             "NIC": nic,
-                            "Room": rooms_str, # Saved as string "101, 102"
+                            "Room": rooms_str,
                             "Persons": num_people,
                             "Days": days,
                             "Total_Bill": total_bill,
                             "Advance_Paid": advance,
                             "Balance_Pending": balance,
-                            "Status": "Active"
+                            "Status": "Active" # Status Active save hoga
                         })
-                        st.success("✅ Booking Confirmed! Go to 'Invoices & Payments' to print receipt.")
+                        st.success("✅ Booking Confirmed! Go to 'Invoices & Checkout' to manage.")
                         st.rerun()
 
     # ==========================================
-    # PAGE 2: INVOICES & PAYMENTS (Clear Dues & Print)
+    # PAGE 2: INVOICES & CHECKOUT (Print & Clear Rooms)
     # ==========================================
-    elif menu == "🧾 Invoices & Payments":
-        st.title("🧾 Generate Invoice & Clear Dues")
+    elif menu == "🧾 Invoices & Checkout":
+        st.title("🧾 Invoice & Room Departure")
         
-    # Fetch all bookings from Firebase (With Smart Key Fix)
         bookings = []
         for doc in db.collection('Bookings').stream():
             data = doc.to_dict()
-            
-            # SMART FIX: Purane aur naye dono formats ko support karna
             b = {
                 'id': doc.id,
                 'Name': data.get('Name', 'Unknown'),
@@ -189,26 +181,27 @@ else:
                 'Days': data.get('Days', 1),
                 'Total_Bill': data.get('Total_Bill', 0),
                 'Advance_Paid': data.get('Advance_Paid', data.get('Advance', 0)),
-                'Balance_Pending': data.get('Balance_Pending', data.get('Balance', 0))
+                'Balance_Pending': data.get('Balance_Pending', data.get('Balance', 0)),
+                'Status': data.get('Status', 'Active')
             }
             bookings.append(b)
             
-        if not bookings:
-            st.info("No bookings available.")
+        # Sirf "Active" log hi checkout mein nazar aayenge
+        active_bookings = [b for b in bookings if b['Status'] == 'Active']
+            
+        if not active_bookings:
+            st.info("No active customers currently in the hotel.")
         else:
-            # Dropdown options banana
-            booking_opts = {b['id']: f"{b['Name']} - Room(s): {b['Room']} | Date: {b['Date']} | Dues: Rs {b['Balance_Pending']}" for b in bookings}
-            
+            booking_opts = {b['id']: f"{b['Name']} - Room(s): {b['Room']} | Dues: Rs {b['Balance_Pending']}" for b in active_bookings}
             selected_booking_id = st.selectbox("Search & Select Customer Record", list(booking_opts.keys()), format_func=lambda x: booking_opts[x])
-            
-            selected_b = next((b for b in bookings if b['id'] == selected_booking_id), None)
+            selected_b = next((b for b in active_bookings if b['id'] == selected_booking_id), None)
             
             if selected_b:
                 st.markdown("---")
                 col1, col2 = st.columns(2)
                 
-                # UPDATE PAYMENT FORM
                 with col1:
+                    # UPDATE PAYMENT FORM
                     st.subheader("💵 Update Payment")
                     st.write(f"**Current Due Balance:** Rs {selected_b['Balance_Pending']}")
                     
@@ -218,25 +211,68 @@ else:
                             new_advance = selected_b['Advance_Paid'] + new_payment
                             new_balance = selected_b['Total_Bill'] - new_advance
                             
-                            # Update in Firebase using Document ID
                             db.collection('Bookings').document(selected_booking_id).update({
                                 'Advance_Paid': new_advance,
                                 'Balance_Pending': new_balance
                             })
-                            st.success(f"Payment of Rs {new_payment} updated successfully!")
+                            st.success(f"Payment of Rs {new_payment} updated! Please refresh invoice.")
                             st.rerun()
 
-                # PRINTABLE INVOICE RECEIPT
+                    # =====================================
+                    # DEPARTURE SYSTEM (Room Clear)
+                    # =====================================
+                    st.markdown("---")
+                    st.subheader("🚪 Departure & Check-out")
+                    if selected_b['Balance_Pending'] > 0:
+                        st.error("⚠️ Customer ka hisaab baqi hai! Please clear the due balance to check out.")
+                        st.button("Close Room & Check-out", disabled=True)
+                    else:
+                        st.success("✅ Payment is cleared. Customer is ready to check out.")
+                        if st.button("Complete Check-out & Free Rooms", type="primary"):
+                            
+                            # 1. Kamre se beds free karna (True ko False karna)
+                            rooms_list = [f"Room_{r.strip()}" for r in selected_b['Room'].split(",")]
+                            people_to_remove = selected_b['Persons']
+                            
+                            for r in rooms_list:
+                                if r in rooms_data:
+                                    current_beds = rooms_data[r].copy()
+                                    for idx in range(4):
+                                        if current_beds[idx] == True and people_to_remove > 0:
+                                            current_beds[idx] = False
+                                            people_to_remove -= 1
+                                    # Database mein vacant beds update
+                                    db.collection('Rooms').document(r).update({'beds': current_beds})
+                            
+                            # 2. Customer ka Status "Completed" karna
+                            db.collection('Bookings').document(selected_booking_id).update({
+                                'Status': 'Checked Out'
+                            })
+                            
+                            st.success("Departure Successful! Rooms are now Vacant.")
+                            st.rerun()
+
                 with col2:
-                    st.subheader("🖨️ Printable Invoice")
-                    st.write("Press `Ctrl + P` to print or save as PDF.")
+                    # PRINTABLE INVOICE WITH BUTTON
+                    st.subheader("🖨️ Customer Invoice")
                     
-                    # HTML and CSS for a professional receipt
                     invoice_html = f"""
-                    <div style="border: 2px solid #333; padding: 20px; border-radius: 10px; background-color: #f9f9f9; color: #333; font-family: Arial, sans-serif;">
+                    <style>
+                        /* Print karte waqt button chup jaye */
+                        @media print {{
+                            .no-print {{ display: none !important; }}
+                            body {{ background-color: white !important; }}
+                        }}
+                    </style>
+                    <div style="border: 2px solid #333; padding: 20px; border-radius: 10px; background-color: white; color: black; font-family: Arial, sans-serif;">
+                        
+                        <div class="no-print" style="text-align: center; margin-bottom: 20px;">
+                            <button onclick="window.print()" style="background-color: #2c3e50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; width: 100%;">🖨️ Print Invoice</button>
+                        </div>
+
                         <div style="text-align: center; border-bottom: 2px dashed #ccc; padding-bottom: 10px; margin-bottom: 20px;">
                             <h2 style="margin: 0; color: #2c3e50;">HOTEL KHATTAK HMS</h2>
-                            <p style="margin: 5px 0; font-size: 14px; color: #7f8c8d;">Peshawar, Khyber Pakhtunkhwa</p>
+                            <p style="margin: 5px 0; font-size: 14px;">Peshawar, Khyber Pakhtunkhwa</p>
                             <p style="margin: 5px 0; font-size: 14px; font-weight: bold;">Date: {selected_b['Date']}</p>
                         </div>
                         
@@ -256,13 +292,13 @@ else:
                             </table>
                         </div>
                         
-                        <div style="text-align: center; margin-top: 30px; font-size: 12px; color: #7f8c8d;">
+                        <div style="text-align: center; margin-top: 30px; font-size: 12px;">
                             <p>Thank you for choosing Hotel Khattak!</p>
                             <p>System Generated Invoice</p>
                         </div>
                     </div>
                     """
-                    st.components.v1.html(invoice_html, height=550, scrolling=True)
+                    st.components.v1.html(invoice_html, height=600, scrolling=True)
 
 
     # ==========================================
@@ -282,7 +318,8 @@ else:
                 'Persons': data.get('Persons', data.get('Beds_Booked', 1)),
                 'Total_Bill': data.get('Total_Bill', 0),
                 'Advance_Paid': data.get('Advance_Paid', data.get('Advance', 0)),
-                'Balance_Pending': data.get('Balance_Pending', data.get('Balance', 0))
+                'Balance_Pending': data.get('Balance_Pending', data.get('Balance', 0)),
+                'Status': data.get('Status', 'Active')
             })
         
         if len(bookings_list) > 0:
@@ -304,7 +341,8 @@ else:
             col_c.metric("⚠️ Pending Balance", f"Rs {filtered_df['Balance_Pending'].sum():,}")
             
             st.subheader("📝 Detailed Transaction Record")
-            st.dataframe(filtered_df[['Date', 'Room', 'Name', 'Persons', 'Total_Bill', 'Advance_Paid', 'Balance_Pending']], use_container_width=True)
+            # Yahan hum Status bhi show kar rahe hain
+            st.dataframe(filtered_df[['Date', 'Room', 'Name', 'Persons', 'Status', 'Total_Bill', 'Advance_Paid', 'Balance_Pending']], use_container_width=True)
         else:
             st.info("Abhi tak koi booking nahi hui. Data khali hai.")
 
