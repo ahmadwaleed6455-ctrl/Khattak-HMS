@@ -63,19 +63,23 @@ else:
     if menu == "🏨 Dashboard & Booking":
         st.title("🏨 Live Room Dashboard")
         
-        # 1. Kamron ko unke makhsoos floors (1 se 4) mein taqseem karna
+        # 1. Kamron ko unke makhsoos floors mein taqseem karna (Safely)
         floor_rooms = {1: [], 2: [], 3: [], 4: []}
         
         for room in room_names:
-            try:
-                room_num = int(room.split('_'))
+            # FIX: Room number nikalne ka robust tareeqa taake app kabhi error na de
+            room_num_str = ''.join([c for c in room if c.isdigit()])
+            if room_num_str:
+                room_num = int(room_num_str)
                 floor_num = room_num // 100
-                if floor_num in floor_rooms:
-                    floor_rooms[floor_num].append(room)
-            except:
-                pass
+                
+                # Floors ko 1, 2, 3, 4 mein fix karna
+                if floor_num < 1: floor_num = 1
+                if floor_num > 4: floor_num = 4
+                
+                floor_rooms[floor_num].append(room)
 
-        # 2. Fix 4 Columns Banana (Har floor ke liye ek column)
+        # 2. Fix 4 Columns Banana
         col1, col2, col3, col4 = st.columns(4)
         cols = [col1, col2, col3, col4]
         floor_titles = ["1st Floor", "2nd Floor", "3rd Floor", "4th Floor"]
@@ -85,20 +89,35 @@ else:
                 # Khubsurat Floor Heading
                 st.markdown(f"<h4 style='text-align: center; background-color: #2c3e50; color: white; padding: 10px; border-radius: 5px; margin-bottom: 15px;'>{floor_titles[i]}</h4>", unsafe_allow_html=True)
                 
-                # Agar us floor par kamre hain toh unhe niche ki taraf list karna
-                if len(floor_rooms[i+1]) > 0:
-                    for room in floor_rooms[i+1]:
+                # Kamron ko line se sort karna (e.g., 101, 102, 103)
+                sorted_rooms = sorted(floor_rooms[i+1], key=lambda x: int(''.join(filter(str.isdigit, x)) or 0))
+                
+                if len(sorted_rooms) > 0:
+                    for room in sorted_rooms:
                         beds = rooms_data[room]
-                        room_display_num = room.split('_')
+                        room_display_num = ''.join([c for c in room if c.isdigit()])
+                        vacant_beds = beds.count(False)
                         
-                        # Beds ka status: 🟢 = Khali, 🔴 = Booked
-                        bed_icons = "".join(["🔴 " if b else "🟢 " for b in beds])
+                        # Purane design wala Text aur Color logic
+                        if vacant_beds == 4:
+                            status_text = "🟢 4 Free"
+                            status_color = "#28a745" # Green
+                        elif vacant_beds == 0:
+                            status_text = "🔴 Full"
+                            status_color = "#dc3545" # Red
+                        else:
+                            status_text = f"🟡 {vacant_beds} Free"
+                            status_color = "#e6b800" # Yellow
+                            
+                        # Chote bed icons (Occupied = Insaan soya hua, Vacant = Khali bed)
+                        bed_icons = "".join(["🛌 " if b else "🛏️ " for b in beds])
                         
-                        # Kamre ka Box (Niche ki taraf drag down hone ke liye)
+                        # Naya Card Design jisme Purana Text shamil hai
                         st.markdown(f"""
-                        <div style="border: 2px solid #e0e0e0; border-radius: 8px; padding: 10px; margin-bottom: 10px; text-align: center; background-color: #f8f9fa; box-shadow: 1px 1px 3px rgba(0,0,0,0.1);">
-                            <h3 style="margin: 0; color: #2c3e50;">{room_display_num}</h3>
-                            <p style="margin: 5px 0 0 0; font-size: 16px; letter-spacing: 2px;">{bed_icons}</p>
+                        <div style="border: 1px solid #ddd; border-left: 6px solid {status_color}; border-radius: 5px; padding: 12px; margin-bottom: 12px; background-color: #fcfcfc; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
+                            <h3 style="margin: 0; color: #2c3e50; font-size: 22px;">Room {room_display_num}</h3>
+                            <p style="margin: 5px 0 2px 0; font-weight: bold; color: {status_color}; font-size: 15px;">{status_text}</p>
+                            <p style="margin: 0; font-size: 18px; letter-spacing: 2px;">{bed_icons}</p>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
@@ -107,7 +126,7 @@ else:
         st.markdown("---")
         
       # ==========================================
-        # BOOKING FORM (Niche waise hi rahega)
+        # BOOKING FORM (Niche waise hi rahega jo aapke paas hai)
         # ==========================================
         st.header("📝 New Customer Entry")
         with st.form("booking_form", clear_on_submit=True):
