@@ -219,27 +219,61 @@ else:
                 st.markdown("---")
                 col1, col2 = st.columns(2)
                 
-                with col1:
+          with col1:
                     st.subheader("💵 Update Payment")
                     st.write(f"**Current Due Balance:** Rs {selected_b['Balance_Pending']}")
                     
-                    with st.form("pay_dues_form"):
-                        new_payment = st.number_input("Enter Receiving Amount (Rs)", min_value=0, max_value=selected_b['Balance_Pending'], value=selected_b['Balance_Pending'])
-                        if st.form_submit_button("Update Payment"):
-                            new_advance = selected_b['Advance_Paid'] + new_payment
-                            new_balance = selected_b['Total_Bill'] - new_advance
-                            
-                            db.collection('Bookings').document(selected_booking_id).update({
-                                'Advance_Paid': new_advance,
-                                'Balance_Pending': new_balance
-                            })
-                            st.success(f"Payment of Rs {new_payment} updated! Please refresh invoice.")
-                            st.rerun()
+                    # ==========================================
+                    # SMART PAYMENT & REFUND LOGIC
+                    # ==========================================
+                    if selected_b['Balance_Pending'] > 0:
+                        # Agar paise lene hain
+                        with st.form("pay_dues_form"):
+                            new_payment = st.number_input("Enter Receiving Amount (Rs)", min_value=0, max_value=selected_b['Balance_Pending'], value=selected_b['Balance_Pending'])
+                            if st.form_submit_button("Update Payment"):
+                                new_advance = selected_b['Advance_Paid'] + new_payment
+                                new_balance = selected_b['Total_Bill'] - new_advance
+                                
+                                db.collection('Bookings').document(selected_booking_id).update({
+                                    'Advance_Paid': new_advance,
+                                    'Balance_Pending': new_balance
+                                })
+                                st.success(f"Payment of Rs {new_payment} updated! Please refresh invoice.")
+                                st.rerun()
+                                
+                    elif selected_b['Balance_Pending'] < 0:
+                        # Agar paise wapas karne hain (Minus Balance)
+                        refund_amount = abs(selected_b['Balance_Pending']) # Minus sign hatane ke liye
+                        st.warning(f"⚠️ Customer ne Rs {refund_amount} zyada pay kiye hue hain. Unhein wapas karein.")
+                        
+                        with st.form("refund_form"):
+                            return_cash = st.number_input("Refund Amount to Customer (Rs)", min_value=0, max_value=refund_amount, value=refund_amount)
+                            if st.form_submit_button("Process Refund"):
+                                new_advance = selected_b['Advance_Paid'] - return_cash
+                                new_balance = selected_b['Total_Bill'] - new_advance
+                                
+                                db.collection('Bookings').document(selected_booking_id).update({
+                                    'Advance_Paid': new_advance,
+                                    'Balance_Pending': new_balance
+                                })
+                                st.success(f"✅ Refund of Rs {return_cash} processed!")
+                                st.rerun()
+                                
+                    else:
+                        # Agar Hisaab 0 hai
+                        st.success("✅ Hisaab bilkul clear hai. Customer can check out.")
 
+
+                    # =====================================
+                    # DEPARTURE SYSTEM (Room Clear) -> Yeh code waise hi rahega
+                    # =====================================
                     st.markdown("---")
                     st.subheader("🚪 Departure & Check-out")
                     if selected_b['Balance_Pending'] > 0:
                         st.error("⚠️ Customer ka hisaab baqi hai! Please clear the due balance to check out.")
+                        st.button("Close Room & Check-out", disabled=True)
+                    elif selected_b['Balance_Pending'] < 0:
+                        st.error("⚠️ Pehle customer ke baqi paise refund karein!")
                         st.button("Close Room & Check-out", disabled=True)
                     else:
                         st.success("✅ Payment is cleared. Customer is ready to check out.")
